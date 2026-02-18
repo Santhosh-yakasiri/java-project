@@ -8,8 +8,13 @@ pipeline {
 
   stages {
     stage('Checkout') {
+      steps { checkout scm }
+    }
+
+    // >>> Run init BEFORE validate <<<
+    stage('Terraform Init') {
       steps {
-        checkout scm
+        sh 'terraform init -input=false'
       }
     }
 
@@ -18,14 +23,6 @@ pipeline {
         sh '''
           terraform fmt -check -recursive || true
           terraform validate
-        '''
-      }
-    }
-
-    stage('Terraform Init') {
-      steps {
-        sh '''
-          terraform init -input=false
         '''
       }
     }
@@ -40,25 +37,19 @@ pipeline {
         }
       }
       post {
-        success {
-          archiveArtifacts artifacts: 'tfplan', fingerprint: true
-        }
+        success { archiveArtifacts artifacts: 'tfplan', fingerprint: true }
       }
     }
 
     stage('Approve Apply') {
-      steps {
-        input message: 'Apply this Terraform plan?', ok: 'Apply'
-      }
+      steps { input message: 'Apply this Terraform plan?', ok: 'Apply' }
     }
 
     stage('Terraform Apply') {
       steps {
         withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
                           credentialsId: 'aws-prod']]) {
-          sh '''
-            terraform apply -input=false -auto-approve tfplan
-          '''
+          sh 'terraform apply -input=false -auto-approve tfplan'
         }
       }
     }
